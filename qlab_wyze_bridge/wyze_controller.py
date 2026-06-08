@@ -288,7 +288,7 @@ class WyzeController:
         on = _truthy(on)
         for b in self.resolve(target):
             log.info("SUNMATCH %s -> %s", b.name, on)
-            self._call(lambda c, b=b: c.bulbs.sun_match(
+            self._call(lambda c, b=b: c.bulbs.set_sun_match(
                 device_mac=b.mac, device_model=b.model, sun_match=on))
 
     def set_away_mode(self, target, on):

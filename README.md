@@ -50,6 +50,15 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+> **If install fails building `blackboxprotobuf`** (a Wyze SDK dependency) with
+> an error like `AttributeError: install_layout`, your `setuptools` is too new
+> for that legacy package. Pin an older build toolchain first, then retry:
+>
+> ```bash
+> pip install "setuptools<66" wheel
+> pip install -r requirements.txt
+> ```
+
 ## 2. Get your Wyze API key
 
 Wyze now requires an API key for SDK/API access:
