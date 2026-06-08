@@ -1,0 +1,22 @@
+# Local configuration with real credentials — never commit this
+config.yaml
+*.local.yaml
+
+# Cached Wyze auth tokens
+.wyze_token.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/

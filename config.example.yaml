@@ -1,0 +1,57 @@
+# QLab → Wyze Bridge configuration
+# ---------------------------------
+# Copy this file to "config.yaml" and fill in your details.
+# config.yaml is git-ignored so your credentials stay out of the repo.
+#
+# Any credential left blank here will be read from the matching environment
+# variable instead (WYZE_EMAIL, WYZE_PASSWORD, WYZE_KEY_ID, WYZE_API_KEY,
+# WYZE_TOTP_KEY, WYZE_ACCESS_TOKEN). You can also use ${VAR} syntax in any
+# value below to pull it from the environment.
+
+wyze:
+  # Your Wyze account login.
+  email: ${WYZE_EMAIL}
+  password: ${WYZE_PASSWORD}
+
+  # API key + key id from https://developer-api-console.wyze.com/
+  # Wyze now REQUIRES these for API access. Create a key, then paste them here.
+  key_id: ${WYZE_KEY_ID}
+  api_key: ${WYZE_API_KEY}
+
+  # Optional: TOTP secret if your account uses an authenticator app for 2FA.
+  # totp_key: ${WYZE_TOTP_KEY}
+
+osc:
+  # Address the bridge listens on. 0.0.0.0 accepts connections from any
+  # machine on the network (e.g. the Mac running QLab). Use 127.0.0.1 to
+  # only accept from the same machine.
+  host: 0.0.0.0
+  port: 9000
+
+  # First path segment the bridge responds to: /wyze/<target>/<command>
+  prefix: wyze
+
+# Optional explicit bulb mapping. The bridge auto-discovers your bulbs and
+# names them after their Wyze app nickname (lowercased, spaces -> underscores),
+# so this section is usually unnecessary. Use it to pin a friendly name to a
+# specific MAC + model, or if auto-discovery doesn't find a device.
+#
+# Run `python -m qlab_wyze_bridge --list-devices` to print MACs and models.
+bulbs:
+  # stage_left:
+  #   mac: "7C78B2XXXXXX"
+  #   model: "WLPA19C"        # WLPA19C = Wyze Bulb Color
+  # stage_right:
+  #   mac: "2CAA8EYYYYYY"
+  #   model: "WLPA19C"
+
+# Optional named groups so one OSC message can hit several bulbs at once.
+# Target a group exactly like a single bulb: /wyze/stage/on
+groups:
+  # stage: [stage_left, stage_right]
+
+fade:
+  # Minimum seconds between steps when fading brightness or color. Lower =
+  # smoother fades but more API calls (Wyze's cloud can rate-limit if hammered).
+  # 0.25 (4 updates/sec) is a safe, smooth default.
+  min_interval: 0.25
