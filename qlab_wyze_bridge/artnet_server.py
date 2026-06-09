@@ -101,13 +101,27 @@ class ArtNetServer:
         if not self._fixtures:
             log.warning("Art-Net enabled but no fixtures patched — not starting.")
             return
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # Share port 6454 with other Art-Net software on this machine if possible.
+        reuseport = getattr(socket, "SO_REUSEPORT", None)
+        if reuseport is not None:
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, reuseport, 1)
+            except OSError:
+                pass
         try:
-            self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         except OSError:
             pass
-        self._sock.bind((self.host, self.port))
+        try:
+            sock.bind((self.host, self.port))
+        except OSError as err:
+            log.error("Art-Net could not bind %s:%d (%s). Art-Net is disabled; "
+                      "OSC control still works.", self.host, self.port, err)
+            sock.close()
+            return
+        self._sock = sock
         threading.Thread(target=self._receive_loop, daemon=True).start()
         threading.Thread(target=self._dispatch_loop, daemon=True).start()
         log.info("Art-Net listening on %s:%d — %d fixture(s), throttle %.2fs",
