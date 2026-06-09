@@ -43,10 +43,17 @@ def _resolve(value, env_name):
 def load_config(path):
     """Read the YAML config at *path* (if it exists) and merge with env vars."""
     # Load a .env file (if present) into the environment so credentials can
-    # live there. Real shell exports take precedence over .env values.
+    # live there. Real shell exports take precedence over .env values. We look
+    # explicitly next to the project root so it's found even when the bridge
+    # runs as a background service with a different working directory.
     try:
         from dotenv import load_dotenv
-        load_dotenv()
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        project_env = os.path.join(project_root, ".env")
+        if os.path.exists(project_env):
+            load_dotenv(project_env)
+        else:
+            load_dotenv()
     except ImportError:
         pass
 

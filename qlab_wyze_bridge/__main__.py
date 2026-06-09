@@ -3,6 +3,7 @@
 import argparse
 import logging
 import sys
+import time
 
 from .config import load_config
 from .osc_server import OscBridge
@@ -47,6 +48,29 @@ def _enable_system_trust_store(log):
         log.debug("Could not enable system trust store: %s", err)
 
 
+def _connect_with_retry(controller, log, max_attempts):
+    """Connect to Wyze, retrying with exponential backoff on failure.
+
+    Returns True once connected, or False after exhausting attempts (the
+    launchd KeepAlive will then restart the process and we try again).
+    """
+    delay = 2
+    for attempt in range(1, max_attempts + 1):
+        try:
+            controller.connect()
+            return True
+        except Exception as err:  # noqa: BLE001
+            if attempt >= max_attempts:
+                log.error("Failed to connect to Wyze after %d attempt(s): %s",
+                          attempt, err)
+                return False
+            log.warning("Connect attempt %d/%d failed (%s); retrying in %ds.",
+                        attempt, max_attempts, err, delay)
+            time.sleep(delay)
+            delay = min(delay * 2, 30)
+    return False
+
+
 def main(argv=None):
     args = build_parser().parse_args(argv)
 
@@ -69,10 +93,11 @@ def main(argv=None):
         simulate=args.simulate,
     )
 
-    try:
-        controller.connect()
-    except Exception as err:  # noqa: BLE001
-        log.error("Failed to connect to Wyze: %s", err)
+    # Retry the connection with backoff. At boot (as a system service) the
+    # network may not be ready yet, and Wyze's cloud can hiccup — neither
+    # should bring the bridge down. Fail fast for the interactive --list-devices.
+    max_attempts = 1 if args.list_devices else 8
+    if not _connect_with_retry(controller, log, max_attempts):
         return 1
 
     if args.list_devices:

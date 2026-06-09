@@ -147,9 +147,51 @@ restarts itself if it ever crashes):
 
 Logs for all of the above are written to `logs/bridge.log`.
 
+> `bridgectl install` creates a **per-user LaunchAgent** — it runs only while
+> *that* user is logged in. For a shared production Mac, use the system service
+> below instead.
+
 > Credentials for background/service mode must be in your **`.env`** file (not
 > just `export`ed in a shell), since the background process doesn't inherit
 > your terminal's environment. The `.env` route from step 3 handles this.
+
+### Production / multi-user Mac (boot service)
+
+On a show Mac where an **admin** installs the software but **unprivileged
+techs** run QLab under their own accounts, install the bridge as a system
+**LaunchDaemon**. It starts at boot, restarts itself if it crashes, and runs
+independently of who is logged in — so the techs never touch it.
+
+As the admin, after running `./install.sh` (which creates the venv and `.env`):
+
+```bash
+sudo ./install-service.sh      # install + start the boot service
+sudo ./uninstall-service.sh    # stop + remove it
+```
+
+How it works and why it fits this setup:
+
+- The bridge is a **network service** — techs interact with it only by sending
+  OSC to `127.0.0.1:9000` from QLab. They don't run any script or need access
+  to the install folder.
+- The service runs as the admin account (the user who ran `sudo`), so your
+  Wyze password in `.env` is locked to that account (`chmod 600`) and the techs
+  can't read it. Override with `sudo SERVICE_USER=name ./install-service.sh`.
+- It logs to `/Library/Logs/qlab-wyze-bridge.log`, which any user can read:
+  `tail -f /Library/Logs/qlab-wyze-bridge.log`.
+- Any user can check it's alive with `pgrep -fl qlab_wyze_bridge`. Restarting
+  it needs admin: `sudo launchctl kickstart -k system/com.qlab-wyze-bridge`.
+
+**Where to install it:** put the project folder somewhere outside a personal
+home directory so it's clearly system-wide and survives account changes — e.g.
+`/usr/local/qlab-wyze-bridge` or `/opt/qlab-wyze-bridge`. Clone it there, run
+`./install.sh` then `sudo ./install-service.sh` from that folder. (The techs
+don't need read access to it; only the service account does.)
+
+> Letting techs restart it **without** admin is optional: add a sudoers rule
+> (`sudo visudo -f /etc/sudoers.d/qlab-wyze-bridge`) such as
+> `%staff ALL=(root) NOPASSWD: /bin/launchctl kickstart -k system/com.qlab-wyze-bridge`
+> so the `staff` group can run just that one restart command.
 
 ---
 
