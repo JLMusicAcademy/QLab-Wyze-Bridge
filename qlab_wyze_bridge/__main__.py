@@ -27,6 +27,26 @@ def build_parser():
     return p
 
 
+def _enable_system_trust_store(log):
+    """Verify TLS against the OS trust store instead of only the certifi roots.
+
+    Some Wyze API hosts (e.g. api.wyzecam.com) serve an incomplete certificate
+    chain — they omit the intermediate CA. The bundled certifi roots then fail
+    with "unable to get local issuer certificate". The macOS and Windows
+    verifiers fetch the missing intermediate automatically (AIA), so routing
+    verification through the system trust store fixes it. No-op if truststore
+    isn't installed (e.g. Python < 3.10), falling back to certifi.
+    """
+    try:
+        import truststore
+        truststore.inject_into_ssl()
+        log.debug("TLS verification using the system trust store (truststore).")
+    except ImportError:
+        log.debug("truststore unavailable; using certifi for TLS verification.")
+    except Exception as err:  # noqa: BLE001 - never block startup on this
+        log.debug("Could not enable system trust store: %s", err)
+
+
 def main(argv=None):
     args = build_parser().parse_args(argv)
 
@@ -36,6 +56,8 @@ def main(argv=None):
         datefmt="%H:%M:%S",
     )
     log = logging.getLogger("qlab_wyze_bridge")
+
+    _enable_system_trust_store(log)
 
     cfg = load_config(args.config)
 

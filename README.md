@@ -215,6 +215,13 @@ WantedBy=multi-user.target
   session.
 - **`sunmatch` errors:** Sun Match is only available on certain models (Bulb
   White v1/v2, Bulb Color, Bulb Color BR30, Light Strip / Pro).
+- **`SSL: CERTIFICATE_VERIFY_FAILED ... unable to get local issuer
+  certificate`:** some Wyze hosts serve an incomplete certificate chain. The
+  bridge fixes this by verifying against your OS trust store via the
+  `truststore` package (installed from `requirements.txt`), which fetches the
+  missing intermediate automatically. If you see this error, make sure
+  `truststore` is installed (`pip install truststore`) and you're on Python
+  3.10+.
 - **QLab sends but nothing happens:** confirm QLab's destination IP/port match
   the bridge, that both are on the same network, and that the OSC address
   starts with `/wyze/`. Run the bridge with `-v` to see incoming messages.
