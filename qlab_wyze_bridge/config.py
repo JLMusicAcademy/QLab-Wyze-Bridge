@@ -42,6 +42,14 @@ def _resolve(value, env_name):
 
 def load_config(path):
     """Read the YAML config at *path* (if it exists) and merge with env vars."""
+    # Load a .env file (if present) into the environment so credentials can
+    # live there. Real shell exports take precedence over .env values.
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except ImportError:
+        pass
+
     raw = {}
     if path and os.path.exists(path):
         with open(path, "r", encoding="utf-8") as fh:

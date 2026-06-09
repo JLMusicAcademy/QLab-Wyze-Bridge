@@ -77,10 +77,26 @@ Wyze now requires an API key for SDK/API access:
 cp config.example.yaml config.yaml
 ```
 
-Edit `config.yaml` and fill in your credentials (or leave them blank and set
-the `WYZE_EMAIL`, `WYZE_PASSWORD`, `WYZE_KEY_ID`, `WYZE_API_KEY` environment
-variables instead). `config.yaml` is git-ignored so your credentials stay
-out of the repo.
+You have three ways to supply credentials (pick one):
+
+1. **A `.env` file (recommended)** — copy `.env.example` to `.env` and fill it
+   in. The bridge loads it automatically at startup, and `.env` is git-ignored.
+   Leave the `${WYZE_*}` placeholders as-is in `config.yaml`; they read from
+   the environment that `.env` populates.
+
+   ```bash
+   cp .env.example .env
+   # then edit .env with your email, password, key_id, api_key
+   ```
+
+2. **Directly in `config.yaml`** — replace the `${WYZE_*}` placeholders with
+   your actual values.
+
+3. **Real shell environment variables** — `export WYZE_EMAIL=...` etc.
+
+Precedence: a literal value in `config.yaml` wins; otherwise a real shell
+variable wins; otherwise the `.env` value is used. Both `config.yaml` and
+`.env` are git-ignored so your credentials stay out of the repo.
 
 Confirm the bridge can see your bulbs:
 
