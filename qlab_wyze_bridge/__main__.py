@@ -104,6 +104,14 @@ def main(argv=None):
         print(controller.describe())
         return 0
 
+    # Optional Art-Net listener so QLab can drive the bulbs as DMX fixtures.
+    artnet_server = None
+    if cfg.artnet.get("enabled"):
+        from .artnet_server import ArtNetServer
+        artnet_server = ArtNetServer(controller, cfg.artnet,
+                                     fade_min_interval=cfg.fade_min_interval)
+        artnet_server.start()
+
     bridge = OscBridge(
         controller,
         host=args.host or cfg.osc_host,
@@ -116,6 +124,8 @@ def main(argv=None):
     except KeyboardInterrupt:
         log.info("Shutting down.")
         bridge.shutdown()
+        if artnet_server is not None:
+            artnet_server.stop()
     return 0
 
 

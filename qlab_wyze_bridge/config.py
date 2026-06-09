@@ -15,6 +15,7 @@ class Config:
     bulbs: dict = field(default_factory=dict)
     groups: dict = field(default_factory=dict)
     fade_min_interval: float = 0.25
+    artnet: dict = field(default_factory=dict)
 
 
 # Credential keys mapped to the env var used when the YAML value is blank.
@@ -80,4 +81,5 @@ def load_config(path):
         bulbs=raw.get("bulbs", {}) or {},
         groups=raw.get("groups", {}) or {},
         fade_min_interval=float(fade.get("min_interval", 0.25)),
+        artnet=raw.get("artnet", {}) or {},
     )

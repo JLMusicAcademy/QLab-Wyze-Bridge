@@ -55,3 +55,22 @@ fade:
   # smoother fades but more API calls (Wyze's cloud can rate-limit if hammered).
   # 0.25 (4 updates/sec) is a safe, smooth default.
   min_interval: 0.25
+
+# Optional: control the bulbs from QLab's Light cues (color picker + intensity
+# faders) by having the bridge receive Art-Net. Each bulb uses 4 DMX channels:
+# Red, Green, Blue, Dimmer. Leave disabled if you only use OSC.
+artnet:
+  enabled: false
+  host: 127.0.0.1     # listen address; 127.0.0.1 = same Mac only (point QLab's
+                      # Art-Net output here). Use 0.0.0.0 to accept from the LAN.
+  universe: 0         # Art-Net universe QLab sends on
+  min_interval: 0.3   # min seconds between updates per bulb (cloud rate-limit safety)
+  patch:              # bulb name -> DMX start channel (uses that channel + next 3)
+    gh1: 1            #   gh1 = channels 1,2,3,4  (R,G,B,Dimmer)
+    gh2: 5            #   gh2 = channels 5,6,7,8
+    gh3: 9
+    gh4: 13
+    gh5: 17
+    gh6: 21
+    gh7: 25
+    gh8: 29

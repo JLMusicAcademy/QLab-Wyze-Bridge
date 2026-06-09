@@ -259,6 +259,47 @@ Notes:
 
 ---
 
+## Controlling bulbs from QLab Light cues (Art-Net / DMX)
+
+If you'd rather use QLab's **Light cues** — with the color picker and intensity
+faders — instead of typing OSC, enable the bridge's **Art-Net** listener. The
+bridge then looks like a set of RGB DMX fixtures.
+
+Each bulb uses **4 DMX channels**: Red, Green, Blue, Dimmer (0 = off).
+
+**1. Enable it in `config.yaml`:**
+
+```yaml
+artnet:
+  enabled: true
+  host: 127.0.0.1     # same Mac only; point QLab's Art-Net output here
+  universe: 0
+  min_interval: 0.3
+  patch:
+    gh1: 1            # channels 1-4
+    gh2: 5            # channels 5-8
+    gh3: 9
+    # ...one per bulb, 4 channels apart
+```
+
+Restart the service after editing (`sudo launchctl kickstart -k system/com.qlab-wyze-bridge`).
+
+**2. In QLab:** add an **Art-Net** output (Settings → ... or the Light patch)
+pointed at the bridge's address/universe (e.g. `127.0.0.1`, universe `0`), and
+patch light instruments at the matching channels — one RGB+dimmer fixture per
+bulb. Now QLab Light cues, the color picker, and intensity faders drive them.
+
+> **Reality check:** Wyze bulbs are cloud-controlled, so this is "DMX-ish," not
+> real DMX. Color changes, on/off, and slow fades (1 s+) look fine; fast chases
+> or dragging the picker in real time will look **stepped and lag ~0.3–0.5 s**.
+> The `min_interval` throttle protects you from Wyze's cloud rate limits — raise
+> it if you fade many bulbs at once and see errors in the log.
+
+You can use OSC and Art-Net at the same time, but it's cleanest to drive a given
+bulb from one or the other.
+
+---
+
 ## Testing without bulbs
 
 Use simulate mode to verify your QLab cues without sending anything to Wyze:

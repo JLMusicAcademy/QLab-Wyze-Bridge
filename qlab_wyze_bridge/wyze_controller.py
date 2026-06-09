@@ -337,6 +337,17 @@ class WyzeController:
                 device_mac=b.mac, device_model=b.model, away_mode=on))
 
     # ----------------------------------------------------- low-level applies
+    def _power(self, bulb, on):
+        """Turn a resolved Bulb on/off without logging at INFO or touching
+        fades — used by the Art-Net driver. Cancels any in-progress fade."""
+        self._cancel_fade(bulb.mac)
+        if on:
+            self._call(lambda c: c.bulbs.turn_on(
+                device_mac=bulb.mac, device_model=bulb.model))
+        else:
+            self._call(lambda c: c.bulbs.turn_off(
+                device_mac=bulb.mac, device_model=bulb.model))
+
     def _apply_brightness(self, bulb, value):
         self._call(lambda c, v=value: c.bulbs.set_brightness(
             device_mac=bulb.mac, device_model=bulb.model, brightness=v))
