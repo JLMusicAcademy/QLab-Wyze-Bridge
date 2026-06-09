@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+#
+# bridgectl — start/stop the QLab -> Wyze bridge on macOS.
+#
+#   ./bridgectl start      Launch the bridge in the background.
+#   ./bridgectl stop       Stop the background bridge.
+#   ./bridgectl restart    Restart it.
+#   ./bridgectl status     Show whether it's running.
+#   ./bridgectl logs       Follow the log (Ctrl-C stops watching, not the bridge).
+#
+#   ./bridgectl install    Register as a macOS login service (auto-start + auto-restart).
+#   ./bridgectl uninstall  Remove the login service.
+#
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")" && pwd)"
+PYTHON="$REPO/.venv/bin/python"
+LABEL="com.qlab-wyze-bridge"
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+LOGDIR="$REPO/logs"
+LOGFILE="$LOGDIR/bridge.log"
+RUNDIR="$REPO/.run"
+PIDFILE="$RUNDIR/bridge.pid"
+
+mkdir -p "$LOGDIR" "$RUNDIR"
+
+need_python() {
+  if [ ! -x "$PYTHON" ]; then
+    echo "Error: Python virtualenv not found at:" >&2
+    echo "  $PYTHON" >&2
+    echo "Create it first (from $REPO):" >&2
+    echo "  python3.11 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt" >&2
+    exit 1
+  fi
+}
+
+# Echoes the PID and returns 0 if the background bridge is alive, else returns 1.
+running_pid() {
+  if [ -f "$PIDFILE" ]; then
+    local pid
+    pid="$(cat "$PIDFILE" 2>/dev/null || true)"
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+      echo "$pid"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+service_installed() {
+  launchctl list 2>/dev/null | grep -q "$LABEL"
+}
+
+cmd_start() {
+  need_python
+  if pid="$(running_pid)"; then
+    echo "Already running (pid $pid)."
+    return 0
+  fi
+  if service_installed; then
+    echo "The login service is installed and managing the bridge."
+    echo "Use './bridgectl status' / 'logs', or './bridgectl uninstall' to remove it."
+    return 0
+  fi
+  cd "$REPO"
+  nohup "$PYTHON" -m qlab_wyze_bridge -c "$REPO/config.yaml" >>"$LOGFILE" 2>&1 &
+  echo $! >"$PIDFILE"
+  sleep 1
+  if pid="$(running_pid)"; then
+    echo "Bridge started (pid $pid) — listening for QLab OSC on port 9000."
+    echo "  Watch logs:  ./bridgectl logs"
+    echo "  Stop:        ./bridgectl stop"
+  else
+    echo "Bridge failed to start. Recent log output:" >&2
+    tail -n 25 "$LOGFILE" >&2 || true
+    rm -f "$PIDFILE"
+    exit 1
+  fi
+}
+
+cmd_stop() {
+  if pid="$(running_pid)"; then
+    kill "$pid" 2>/dev/null || true
+    for _ in 1 2 3 4 5 6; do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.5
+    done
+    kill -9 "$pid" 2>/dev/null || true
+    rm -f "$PIDFILE"
+    echo "Bridge stopped."
+  else
+    rm -f "$PIDFILE"
+    if service_installed; then
+      echo "Not running as a background process, but the login service is installed."
+      echo "Use './bridgectl uninstall' to stop and remove the service."
+    else
+      echo "Bridge is not running."
+    fi
+  fi
+}
+
+cmd_status() {
+  if pid="$(running_pid)"; then
+    echo "Background process: running (pid $pid)"
+  else
+    echo "Background process: stopped"
+  fi
+  if service_installed; then
+    echo "Login service:     installed (auto-starts at login)"
+  else
+    echo "Login service:     not installed"
+  fi
+}
+
+cmd_logs() {
+  touch "$LOGFILE"
+  echo "Tailing $LOGFILE"
+  echo "(Ctrl-C stops watching the log; the bridge keeps running.)"
+  echo
+  tail -n 50 -f "$LOGFILE"
+}
+
+write_plist() {
+  cat >"$PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>$LABEL</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$PYTHON</string>
+        <string>-m</string>
+        <string>qlab_wyze_bridge</string>
+        <string>-c</string>
+        <string>$REPO/config.yaml</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>$REPO</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>$LOGFILE</string>
+    <key>StandardErrorPath</key>
+    <string>$LOGFILE</string>
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
+EOF
+}
+
+cmd_install() {
+  need_python
+  # Avoid two servers fighting over port 9000.
+  if running_pid >/dev/null; then
+    cmd_stop
+  fi
+  mkdir -p "$HOME/Library/LaunchAgents"
+  write_plist
+  launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
+  launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null \
+    || launchctl load -w "$PLIST"
+  echo "Installed as a login service — running now and on every login."
+  echo "  Status: ./bridgectl status     Logs: ./bridgectl logs"
+  echo "  Remove: ./bridgectl uninstall"
+}
+
+cmd_uninstall() {
+  launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null \
+    || launchctl unload -w "$PLIST" 2>/dev/null || true
+  rm -f "$PLIST"
+  echo "Login service removed."
+}
+
+case "${1:-}" in
+  start)     cmd_start ;;
+  stop)      cmd_stop ;;
+  restart)   cmd_stop; cmd_start ;;
+  status)    cmd_status ;;
+  logs)      cmd_logs ;;
+  install)   cmd_install ;;
+  uninstall) cmd_uninstall ;;
+  *)
+    echo "Usage: ./bridgectl {start|stop|restart|status|logs|install|uninstall}"
+    exit 2
+    ;;
+esac

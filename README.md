@@ -110,6 +110,8 @@ along with its MAC and model. If a bulb isn't found, add it manually under
 
 ## 4. Run
 
+For a quick test, run it in the foreground (Ctrl-C to quit):
+
 ```bash
 python -m qlab_wyze_bridge
 # or, if pip-installed:  qlab-wyze-bridge
@@ -117,6 +119,37 @@ python -m qlab_wyze_bridge
 
 The bridge listens on UDP `0.0.0.0:9000` by default. Leave it running on a
 machine reachable from your QLab Mac (it can be the same Mac).
+
+### Running it as a background app on your Mac (recommended)
+
+The `bridgectl` script runs the bridge in the background so you can start it,
+leave it, and stop it when you're done — no terminal window to babysit.
+
+```bash
+./bridgectl start      # launch in the background
+./bridgectl status     # is it running?
+./bridgectl logs       # follow the log (Ctrl-C stops watching, not the bridge)
+./bridgectl stop       # stop it
+./bridgectl restart    # restart it
+```
+
+**No-terminal option:** double-click **`Start QLab-Wyze Bridge.command`** in
+Finder to start it, and **`Stop QLab-Wyze Bridge.command`** to stop it. (The
+first time, macOS may ask you to confirm opening it — right-click → Open.)
+
+**Run automatically whenever the Mac is on** (a true login service that also
+restarts itself if it ever crashes):
+
+```bash
+./bridgectl install      # register + start; auto-starts at every login
+./bridgectl uninstall    # stop + remove
+```
+
+Logs for all of the above are written to `logs/bridge.log`.
+
+> Credentials for background/service mode must be in your **`.env`** file (not
+> just `export`ed in a shell), since the background process doesn't inherit
+> your terminal's environment. The `.env` route from step 3 handles this.
 
 ---
 

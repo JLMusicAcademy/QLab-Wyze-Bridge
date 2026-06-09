@@ -8,6 +8,10 @@ config.yaml
 # Cached Wyze auth tokens
 .wyze_token.json
 
+# Runtime logs and pid files (created by ./bridgectl)
+logs/
+.run/
+
 # Python
 __pycache__/
 *.py[cod]
