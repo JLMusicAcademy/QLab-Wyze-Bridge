@@ -40,24 +40,37 @@ what this bridge uses so it can run on its own as a small service next to QLab.
 
 ## 1. Install
 
-Requires Python 3.8+.
+### Easiest: the installer (macOS)
 
 ```bash
 git clone https://github.com/JLMusicAcademy/QLab-Wyze-Bridge.git
 cd QLab-Wyze-Bridge
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+./install.sh
 ```
 
-> **If install fails building `blackboxprotobuf`** (a Wyze SDK dependency) with
-> an error like `AttributeError: install_layout`, your `setuptools` is too new
-> for that legacy package. Pin an older build toolchain first, then retry:
->
-> ```bash
-> pip install "setuptools<66" wheel
-> pip install -r requirements.txt
-> ```
+`install.sh` does everything: it finds a compatible Python (3.10/3.11) and, if
+none is present, **installs Python 3.11 for you** — via Homebrew if you have it,
+otherwise by downloading the official installer from python.org (you'll be asked
+for your admin password). It then builds the virtualenv, installs all
+dependencies in the right order, sets up your `.env` credentials (optionally
+prompting for them), and verifies the Wyze connection.
+
+> **Why Python 3.10/3.11 specifically?** The Wyze SDK depends on a legacy
+> package chain that doesn't build/run on Python 3.12+. The installer handles
+> this for you; if you install manually, use 3.10 or 3.11.
+
+### Manual install
+
+Requires Python **3.10 or 3.11**.
+
+```bash
+git clone https://github.com/JLMusicAcademy/QLab-Wyze-Bridge.git
+cd QLab-Wyze-Bridge
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install "setuptools<66" wheel        # needed to build a legacy dependency
+pip install -r requirements.txt
+```
 
 ## 2. Get your Wyze API key
 

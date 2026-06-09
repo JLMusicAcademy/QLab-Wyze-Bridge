@@ -45,12 +45,49 @@ find_python() {
   for cand in \
       "python$PREFERRED" \
       /opt/homebrew/bin/python$PREFERRED /usr/local/bin/python$PREFERRED \
+      "/Library/Frameworks/Python.framework/Versions/$PREFERRED/bin/python$PREFERRED" \
       python3.10 /opt/homebrew/bin/python3.10 /usr/local/bin/python3.10 \
       python3 python; do
     command -v "$cand" >/dev/null 2>&1 || continue
     is_accepted "$(py_version "$cand")" && { command -v "$cand"; return 0; }
   done
   return 1
+}
+
+# Version of the official python.org installer used when we must install Python.
+PYVER_PKG="3.11.9"
+
+install_python() {
+  # Prefer Homebrew if available; otherwise download the official python.org
+  # universal installer (works on Intel and Apple Silicon, no Homebrew needed).
+  if command -v brew >/dev/null 2>&1; then
+    info "Installing Python $PREFERRED via Homebrew..."
+    brew install "python@$PREFERRED" || return 1
+    return 0
+  fi
+
+  info "Homebrew isn't installed — using the official installer from python.org."
+  info "Python $PYVER_PKG will be downloaded and installed (needs your admin password)."
+  local url="https://www.python.org/ftp/python/$PYVER_PKG/python-$PYVER_PKG-macos11.pkg"
+  local tmp pkg
+  tmp="$(mktemp -d)"
+  pkg="$tmp/python-$PYVER_PKG.pkg"
+  info "Downloading $url"
+  if ! curl -fL --progress-bar "$url" -o "$pkg"; then
+    fail "Download failed (no network?)."; rm -rf "$tmp"; return 1
+  fi
+  info "Running the installer (you'll be prompted for your password)..."
+  if ! sudo installer -pkg "$pkg" -target /; then
+    fail "Python installer failed."; rm -rf "$tmp"; return 1
+  fi
+  rm -rf "$tmp"
+  # python.org ships a helper that installs TLS root certificates for its Python.
+  local certcmd="/Applications/Python $PREFERRED/Install Certificates.command"
+  if [ -e "$certcmd" ]; then
+    info "Installing TLS root certificates for the new Python..."
+    "$certcmd" >/dev/null 2>&1 || true
+  fi
+  return 0
 }
 
 bold "QLab -> Wyze Bridge installer"
@@ -60,25 +97,26 @@ info "Looking for a compatible Python ($(IFS=/; echo "${ACCEPTED[*]}"))..."
 PYTHON="$(find_python || true)"
 
 if [ -z "$PYTHON" ]; then
-  warn "No compatible Python found (need ${ACCEPTED[*]}; newer versions don't work with the Wyze SDK's dependencies)."
-  if command -v brew >/dev/null 2>&1; then
-    printf "Install Python %s with Homebrew now? [y/N] " "$PREFERRED"
-    read -r ans || ans=""
-    case "$ans" in
-      y|Y)
-        info "Installing python@$PREFERRED via Homebrew..."
-        brew install "python@$PREFERRED"
-        PYTHON="$(find_python || true)"
-        ;;
-    esac
+  warn "No compatible Python found (need one of: ${ACCEPTED[*]})."
+  warn "Newer Python (3.12+) doesn't work with the Wyze SDK's legacy dependencies."
+  if [ -n "${ASSUME_YES:-}" ]; then
+    ans="y"
   else
-    fail "Homebrew isn't installed. Install Python $PREFERRED from"
-    fail "https://www.python.org/downloads/release/python-3119/ (or install Homebrew), then re-run."
+    printf "Install Python %s now? [Y/n] " "$PREFERRED"
+    read -r ans || ans=""
   fi
+  case "$ans" in
+    n|N) : ;;  # declined
+    *)
+      install_python || true
+      PYTHON="$(find_python || true)"
+      ;;
+  esac
 fi
 
 if [ -z "$PYTHON" ]; then
-  fail "Could not find or install a compatible Python. Aborting."
+  fail "Could not find or install a compatible Python."
+  fail "Install Python $PREFERRED manually from https://www.python.org/downloads/ and re-run."
   exit 1
 fi
 ok "Using Python $(py_version "$PYTHON")  ($PYTHON)"
