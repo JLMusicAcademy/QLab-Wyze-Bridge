@@ -73,6 +73,44 @@ def rgb_to_hex(r, g, b):
     )
 
 
+# Friendly color names usable anywhere a color is expected, e.g.
+#   /wyze/gh1/color blue   or   /wyze/gh1/colorfade amber 3.0
+# For accurate whites, prefer the colortemp command (Kelvin); the white-ish
+# entries here are RGB approximations.
+NAMED_COLORS = {
+    "red": "ff0000", "green": "00ff00", "lime": "80ff00", "blue": "0000ff",
+    "navy": "000080", "cyan": "00ffff", "aqua": "00ffff", "teal": "008080",
+    "magenta": "ff00ff", "fuchsia": "ff00ff", "pink": "ff69b4", "rose": "ff007f",
+    "purple": "8000ff", "violet": "ee82ee", "indigo": "4b0082", "lavender": "b57edc",
+    "yellow": "ffff00", "gold": "ffd700", "amber": "ffbf00", "orange": "ff7000",
+    "white": "ffffff", "warmwhite": "ff8a3d", "warm": "ff8a3d",
+    "daylight": "cfe2ff", "coolwhite": "cfe2ff",
+}
+
+
+def resolve_color(value):
+    """Turn a color name or hex string into a 6-digit hex string.
+
+    Accepts: a named color ("blue"), 6-digit hex ("ff0000" or "#ff0000"), or
+    3-digit shorthand hex ("f00"). Falls back to white on anything unrecognized.
+    """
+    if value is None:
+        return "ffffff"
+    s = str(value).strip().lower()
+    if s in NAMED_COLORS:
+        return NAMED_COLORS[s]
+    s = s.lstrip("#")
+    hexchars = set("0123456789abcdef")
+    if len(s) == 6 and all(c in hexchars for c in s):
+        return s
+    if len(s) == 3 and all(c in hexchars for c in s):
+        return "".join(c * 2 for c in s)
+    log.warning("Unknown color %r; defaulting to white. "
+                "Use a name (%s) or hex like ff0000.",
+                value, ", ".join(sorted(NAMED_COLORS)))
+    return "ffffff"
+
+
 class WyzeController:
     def __init__(self, credentials, bulbs_config=None, groups=None,
                  fade_min_interval=0.25, simulate=False):
@@ -248,15 +286,15 @@ class WyzeController:
             log.info("FADE %s -> %d%% over %.2fs", b.name, value, duration)
             self._start_fade(b, "brightness", target_val=value, duration=duration)
 
-    def set_color(self, target, hexstr):
-        hexstr = str(hexstr).lstrip("#").lower()
+    def set_color(self, target, color):
+        hexstr = resolve_color(color)
         for b in self.resolve(target):
             self._cancel_fade(b.mac)
             log.info("COLOR %s -> #%s", b.name, hexstr)
             self._apply_color(b, hexstr)
 
-    def fade_color(self, target, hexstr, duration=1.0):
-        target_rgb = hex_to_rgb(hexstr)
+    def fade_color(self, target, color, duration=1.0):
+        target_rgb = hex_to_rgb(resolve_color(color))
         duration = max(0.0, float(duration))
         for b in self.resolve(target):
             log.info("COLORFADE %s -> #%s over %.2fs",

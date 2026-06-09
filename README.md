@@ -234,8 +234,8 @@ All addresses follow the pattern **`/wyze/<target>/<command> [arguments]`**.
 | Toggle | `/wyze/<target>/toggle` | — | `/wyze/stage_left/toggle` |
 | Brightness (snap) | `/wyze/<target>/brightness` | `level` 0–100 | `/wyze/stage_left/brightness 75` |
 | Brightness fade | `/wyze/<target>/fade` | `level` 0–100, `seconds` | `/wyze/stage/fade 0 5.0` |
-| Color (snap) | `/wyze/<target>/color` | `hex` **or** `r g b` (0–255) | `/wyze/stage_left/color ff8800` |
-| Color fade | `/wyze/<target>/colorfade` | `hex seconds` **or** `r g b seconds` | `/wyze/stage/colorfade 0000ff 3.0` |
+| Color (snap) | `/wyze/<target>/color` | color **name**, `hex`, **or** `r g b` (0–255) | `/wyze/stage_left/color blue` |
+| Color fade | `/wyze/<target>/colorfade` | `name\|hex seconds` **or** `r g b seconds` | `/wyze/stage/colorfade amber 3.0` |
 | Color wheel (HSV) | `/wyze/<target>/hsv` | `hue` 0–360, `sat` 0–100, `val` 0–100 | `/wyze/stage_left/hsv 120 100 80` |
 | Color temperature | `/wyze/<target>/colortemp` | `kelvin` 1800–6500 | `/wyze/stage_left/colortemp 2700` |
 | Sun Match | `/wyze/<target>/sunmatch` | `0` or `1` | `/wyze/stage_left/sunmatch 1` |
@@ -243,8 +243,12 @@ All addresses follow the pattern **`/wyze/<target>/<command> [arguments]`**.
 
 Notes:
 
-- **Color (hex)** can be sent with or without a leading `#`, e.g. `ff0000` or
-  `#ff0000`. You can also send three integers for R, G, B.
+- **Color** accepts three forms: a **name**, a **hex** string (with or without
+  a leading `#`, e.g. `ff0000`), or three integers for **R G B**. Named colors:
+  `red, green, lime, blue, navy, cyan, aqua, teal, magenta, fuchsia, pink, rose,
+  purple, violet, indigo, lavender, yellow, gold, amber, orange, white,
+  warmwhite, daylight`. An unknown name falls back to white (and logs a
+  warning). For accurate whites, prefer `colortemp` (Kelvin).
 - **HSV** is the easiest mapping for a QLab "color wheel": hue and saturation
   pick the color, and the value (0–100) is applied as brightness.
 - **Fades** are interpolated by the bridge. Step rate is controlled by

@@ -18,13 +18,18 @@ log = logging.getLogger("qlab_wyze_bridge.osc")
 
 
 def _color_from_args(args):
-    """Accept color as a single hex string/int, or as r g b (0-255)."""
+    """Normalize color args to a single token the controller can resolve.
+
+    Accepts a single color name or hex string ("blue", "ff0000", "#ff0000"),
+    or three numbers for r g b (0-255). Names/hex are passed through as-is so
+    the controller's resolve_color() handles them.
+    """
     if len(args) >= 3:
         return rgb_to_hex(args[0], args[1], args[2])
     if len(args) == 1:
         value = args[0]
         if isinstance(value, str):
-            return value.lstrip("#").lower()
+            return value.strip().lower()
         # Treat a lone integer as a packed 0xRRGGBB value.
         return "{:06x}".format(int(value) & 0xFFFFFF)
     return "ffffff"
