@@ -48,27 +48,44 @@ def _enable_system_trust_store(log):
         log.debug("Could not enable system trust store: %s", err)
 
 
-def _connect_with_retry(controller, log, max_attempts):
-    """Connect to Wyze, retrying with exponential backoff on failure.
+def _is_rate_limited(err):
+    text = str(err)
+    return "429" in text or "Too Many Requests" in text
 
-    Returns True once connected, or False after exhausting attempts (the
-    launchd KeepAlive will then restart the process and we try again).
+
+def _connect_with_retry(controller, log, max_attempts=0):
+    """Connect to Wyze, retrying on failure.
+
+    max_attempts=0 means retry forever (used by the long-running service) so it
+    stays in ONE patient process instead of exiting and letting launchd restart
+    it — restart loops are what hammer the login endpoint. A 429 (rate limit)
+    gets a long fixed backoff so we wait it out instead of making it worse.
+
+    Returns True once connected, or False after exhausting a finite budget.
     """
     delay = 2
-    for attempt in range(1, max_attempts + 1):
+    attempt = 0
+    while True:
+        attempt += 1
         try:
             controller.connect()
             return True
         except Exception as err:  # noqa: BLE001
-            if attempt >= max_attempts:
+            if max_attempts and attempt >= max_attempts:
                 log.error("Failed to connect to Wyze after %d attempt(s): %s",
                           attempt, err)
                 return False
-            log.warning("Connect attempt %d/%d failed (%s); retrying in %ds.",
-                        attempt, max_attempts, err, delay)
-            time.sleep(delay)
-            delay = min(delay * 2, 30)
-    return False
+            if _is_rate_limited(err):
+                wait = 300
+                log.warning("Wyze rate-limited the login (429). Waiting %ds for "
+                            "it to clear — do NOT restart the service repeatedly, "
+                            "that resets the cooldown.", wait)
+            else:
+                wait = delay
+                delay = min(delay * 2, 30)
+                log.warning("Connect attempt %d failed (%s); retrying in %ds.",
+                            attempt, err, wait)
+            time.sleep(wait)
 
 
 def main(argv=None):
@@ -96,7 +113,9 @@ def main(argv=None):
     # Retry the connection with backoff. At boot (as a system service) the
     # network may not be ready yet, and Wyze's cloud can hiccup — neither
     # should bring the bridge down. Fail fast for the interactive --list-devices.
-    max_attempts = 1 if args.list_devices else 8
+    # --list-devices fails fast (1 try); the service retries forever (0) so it
+    # waits out transient failures and rate limits without a restart loop.
+    max_attempts = 1 if args.list_devices else 0
     if not _connect_with_retry(controller, log, max_attempts):
         return 1
 

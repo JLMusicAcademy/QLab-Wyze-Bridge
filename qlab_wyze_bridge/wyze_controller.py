@@ -9,7 +9,9 @@ Responsibilities:
 """
 
 import colorsys
+import json
 import logging
+import os
 import re
 import threading
 import time
@@ -134,6 +136,11 @@ class WyzeController:
         self._fades = {}              # mac -> threading.Event (cancel signal)
         self._fade_lock = threading.Lock()
 
+        # Cache the Wyze session here so restarts don't re-hit the rate-limited
+        # login endpoint. Lives next to the project, locked to mode 600.
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self._token_cache_path = os.path.join(project_root, ".wyze_token.json")
+
     # ------------------------------------------------------------------ setup
     def connect(self):
         """Log in (unless simulating) and build the bulb registry."""
@@ -150,14 +157,33 @@ class WyzeController:
                      len(self.bulbs), ", ".join(sorted(self.bulbs)))
 
     def _login(self):
+        """Establish a Wyze client, preferring a cached session over a fresh
+        login (Wyze rate-limits the login endpoint aggressively)."""
         from wyze_sdk import Client
 
         creds = self._credentials
         if creds.get("token"):
-            self._client = Client(token=creds["token"])
-            log.info("Connected to Wyze using a cached access token.")
+            self._client = Client(token=creds["token"],
+                                  refresh_token=creds.get("refresh_token"))
+            log.info("Connected to Wyze using a configured access token.")
             return
 
+        cached = self._load_token_cache()
+        if cached and cached.get("access_token"):
+            # Reuse the saved session; validity is checked lazily and refreshed
+            # on demand, so a normal restart costs zero login calls.
+            self._client = Client(token=cached["access_token"],
+                                  refresh_token=cached.get("refresh_token"))
+            log.info("Reusing cached Wyze session (no login needed).")
+            return
+
+        self._full_login()
+
+    def _full_login(self):
+        """Perform a fresh email/password login and cache the resulting tokens."""
+        from wyze_sdk import Client
+
+        creds = self._credentials
         if not (creds.get("email") and creds.get("password")):
             raise RuntimeError(
                 "Wyze credentials missing. Provide email + password (and "
@@ -169,6 +195,48 @@ class WyzeController:
                 kwargs[opt] = creds[opt]
         self._client = Client(**kwargs)
         log.info("Logged in to Wyze as %s.", creds["email"])
+        self._save_tokens()
+
+    def _reauth(self):
+        """Recover an expired session: try a cheap token refresh first, then
+        fall back to a full login. Returns True on success."""
+        try:
+            if self._client is not None and getattr(self._client, "_refresh_token", None):
+                self._client.refresh_token()
+                self._save_tokens()
+                log.info("Refreshed Wyze access token.")
+                return True
+        except Exception as err:  # noqa: BLE001
+            log.warning("Token refresh failed (%s); attempting full login.", err)
+        try:
+            self._full_login()
+            return True
+        except Exception as err:  # noqa: BLE001
+            log.error("Wyze re-login failed: %s", err)
+            return False
+
+    def _load_token_cache(self):
+        try:
+            with open(self._token_cache_path, "r", encoding="utf-8") as fh:
+                return json.load(fh)
+        except (OSError, ValueError):
+            return None
+
+    def _save_tokens(self):
+        try:
+            token = getattr(self._client, "_token", None)
+            if not token:
+                return
+            data = {
+                "access_token": token,
+                "refresh_token": getattr(self._client, "_refresh_token", None),
+                "saved_at": time.time(),
+            }
+            with open(self._token_cache_path, "w", encoding="utf-8") as fh:
+                json.dump(data, fh)
+            os.chmod(self._token_cache_path, 0o600)
+        except Exception as err:  # noqa: BLE001
+            log.debug("Could not write token cache: %s", err)
 
     def _discover(self):
         from wyze_sdk.errors import WyzeApiError
@@ -176,8 +244,11 @@ class WyzeController:
         try:
             devices = self._client.devices_list()
         except WyzeApiError as err:
-            log.error("Could not list Wyze devices: %s", err)
-            return
+            # A cached token may have expired — refresh/re-login and retry once.
+            log.info("Device list failed (%s); re-authenticating.", err)
+            if not self._reauth():
+                raise
+            devices = self._client.devices_list()
 
         for dev in devices:
             model = (getattr(getattr(dev, "product", None), "model", None)
@@ -248,8 +319,8 @@ class WyzeController:
                 fn(self._client)
             except WyzeApiError as err:
                 log.warning("Wyze API error (%s); re-authenticating and retrying.", err)
-                self._login()
-                fn(self._client)
+                if self._reauth():
+                    fn(self._client)
 
     # ------------------------------------------------------------- commands
     def turn_on(self, target):
