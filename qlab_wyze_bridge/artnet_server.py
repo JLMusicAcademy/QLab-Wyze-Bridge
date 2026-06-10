@@ -136,9 +136,10 @@ class ArtNetServer:
                 pass
 
     def _receive_loop(self):
+        patched_universes = {fx.universe for fx in self._fixtures}
         while not self._stop.is_set():
             try:
-                data, _ = self._sock.recvfrom(1024)
+                data, addr = self._sock.recvfrom(1024)
             except OSError:
                 break
             parsed = parse_artdmx(data)
@@ -146,12 +147,26 @@ class ArtNetServer:
                 continue
             universe, dmx = parsed
             with self._lock:
+                first = universe not in self._dmx
                 buf = self._dmx.get(universe)
                 if buf is None:
                     buf = bytearray(512)
                     self._dmx[universe] = buf
                 buf[:len(dmx)] = dmx
                 self._received.add(universe)
+            if first:
+                # The single most useful Art-Net debug line: tells you which
+                # universe is actually arriving, so you can match the config.
+                src = addr[0] if addr else "?"
+                if universe in patched_universes:
+                    log.info("Art-Net: receiving universe %d from %s (%d channels)"
+                             " — matches a patched fixture.", universe, src, len(dmx))
+                else:
+                    log.warning("Art-Net: receiving universe %d from %s, but no "
+                                "fixture is patched to it. Patched universes: %s. "
+                                "Check the 'universe' setting (QLab may number it "
+                                "differently — often off by one).",
+                                universe, src, sorted(patched_universes) or "none")
 
     def _dispatch_loop(self):
         while not self._stop.is_set():
